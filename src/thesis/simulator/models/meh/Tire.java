@@ -1,4 +1,6 @@
-package thesis.simulator.models;
+package thesis.simulator.models.meh;
+
+import thesis.simulator.models.TireCompound;
 
 public class Tire {
 

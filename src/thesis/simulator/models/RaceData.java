@@ -23,6 +23,9 @@ public class RaceData {
     @JsonProperty("rain_probability")
     private double rainProbability;
 
+    @JsonProperty("total_laps")
+    private int totalLaps;
+
     public RaceData() {
     }
 
@@ -66,6 +69,9 @@ public class RaceData {
         this.rainProbability = rainProbability;
     }
 
+    public int getTotalLaps() {return totalLaps;}
+    public void setTotalLaps(int totalLaps) {this.totalLaps = totalLaps;}
+
     @Override
     public String toString() {
         return "RaceData{" +
@@ -74,6 +80,7 @@ public class RaceData {
                 ", tireDegradation=" + tireDegradation +
                 ", trackTemp=" + trackTemp +
                 ", rainProbability=" + rainProbability +
+                ", totalLaps=" + totalLaps +
                 '}';
     }
 }

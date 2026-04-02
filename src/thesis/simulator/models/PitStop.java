@@ -1,11 +1,13 @@
 package thesis.simulator.models;
-
 public class PitStop {
-    private int lap;
-    private TireCompound newCompound;
-    //[ S | P1 | C1 | P2 | C2 ]
 
-    public PitStop(int lap, TireCompound newCompound) {
+    private int lap;
+    private String newCompound;
+
+    public PitStop() {
+    }
+
+    public PitStop(int lap, String newCompound) {
         this.lap = lap;
         this.newCompound = newCompound;
     }
@@ -14,7 +16,15 @@ public class PitStop {
         return lap;
     }
 
-    public TireCompound getNewCompound() {
+    public void setLap(int lap) {
+        this.lap = lap;
+    }
+
+    public String getNewCompound() {
         return newCompound;
+    }
+
+    public void setNewCompound(String newCompound) {
+        this.newCompound = newCompound;
     }
 }

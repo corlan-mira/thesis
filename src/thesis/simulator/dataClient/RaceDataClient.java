@@ -24,14 +24,12 @@ public class RaceDataClient {
                 .uri(URI.create(url))
                 .GET()
                 .build();
-
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
 
         ObjectMapper mapper = JsonMapper.builder()
                 .enable(JsonReadFeature.ALLOW_NON_NUMERIC_NUMBERS)
                 .build();
-
         return mapper.readValue(response.body(), RaceData.class);
     }
 }

@@ -17,43 +17,35 @@ public class SimulationEngine {
             performance = 1.0;
         }
 
-        String currentCompound = strategy.getCurrentCompound();
+        String currentCompound = strategy.getStartCompound();
 
-        for (int lap = 1; lap <= 50; lap++) {
+        for (int lap = 1; lap <= data.getTotalLaps(); lap++) {
 
             double lapTime = data.getBaseLapTime();
-
             lapTime += tireWear;
             lapTime *= performance;
             lapTime *= scenario.getWeatherMultiplier();
-
-            // Random lap variation
+            //lap variation
             lapTime += random.nextGaussian() * scenario.getLapNoiseStd();
-
-            // Safety car effect
+            //seafety car
             if (scenario.hasSafetyCar() && lap == scenario.getSafetyCarLap()) {
                 lapTime *= 1.10;
             }
-
-            // Pit stop
-            if (strategy.isPitLap(lap)) {
+            //pit stop
+            if (strategy.getPitStopAtLap(lap)!=null) {
                 double pitLoss = scenario.getPitStopMean()
                         + random.nextGaussian() * scenario.getPitStopStd();
-
                 totalTime += pitLoss;
                 tireWear = 0.0;
-                currentCompound = strategy.getNextCompound();
+                currentCompound = strategy.getPitStopAtLap(lap).getNewCompound();
             }
-
+            //tyre deg
             Double deg = data.getTireDegradation().get(currentCompound.toUpperCase());
             if (deg == null) {
                 deg = 0.1;
             }
-
-            // Add degradation noise
             double effectiveDeg = deg + random.nextGaussian() * 0.01;
             effectiveDeg = Math.max(0.0, effectiveDeg);
-
             tireWear += effectiveDeg;
             totalTime += lapTime;
         }

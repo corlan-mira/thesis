@@ -1,34 +1,47 @@
 package thesis.simulator.models;
 
+import java.util.ArrayList;
 import java.util.List;
 
 public class Strategy {
 
-    public int pitLap;
-    public String startCompound;
-    public String nextCompound;
+    private String startCompound;
+    private List<PitStop> pitStops = new ArrayList<>();
 
-    public boolean isPitLap(int lap) {
-        return lap == pitLap;
+    public Strategy() {
     }
 
-    public String getCurrentCompound() {
-        return nextCompound;
+    public Strategy(String startCompound, List<PitStop> pitStops) {
+        this.startCompound = startCompound;
+        this.pitStops = pitStops;
     }
 
-    public String getNextCompound() {
-        return nextCompound;
-    }
-
-    public void setPitLap(int pitLap) {
-        this.pitLap = pitLap;
+    public String getStartCompound() {
+        return startCompound;
     }
 
     public void setStartCompound(String startCompound) {
         this.startCompound = startCompound;
     }
 
-    public void setNextCompound(String nextCompound) {
-        this.nextCompound = nextCompound;
+    public List<PitStop> getPitStops() {
+        return pitStops;
+    }
+
+    public void setPitStops(List<PitStop> pitStops) {
+        this.pitStops = pitStops;
+    }
+
+    public void addPitStop(PitStop pitStop) {
+        this.pitStops.add(pitStop);
+    }
+
+    public PitStop getPitStopAtLap(int lap) {
+        for (PitStop pitStop : pitStops) {
+            if (pitStop.getLap() == lap) {
+                return pitStop;
+            }
+        }
+        return null;
     }
 }
