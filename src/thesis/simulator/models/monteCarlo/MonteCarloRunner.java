@@ -11,14 +11,35 @@ public class MonteCarloRunner {
 
     private final SimulationEngine engine = new SimulationEngine();
 
-    public MonteCarloResult run(RaceData data, Strategy strategy, String driver, int iterations) {
+    public MonteCarloResult run(RaceData data, Strategy strategy, String driver, int iterations, long seed) {
         MonteCarloResult result = new MonteCarloResult();
-        Random random = new Random();
+        Random random = new Random(seed);
 
         for (int i = 0; i < iterations; i++) {
             RaceScenario scenario = generateScenario(random);
 
             double raceTime = engine.simulateRace(data, strategy, driver, scenario, random);
+            result.addRaceTime(raceTime);
+        }
+
+        return result;
+    }
+
+    public MonteCarloResult run(RaceData data, Strategy strategy, String driver, int iterations) {
+        long seed = System.nanoTime();
+        System.out.println("MC autoseed: " + seed);
+        return run(data, strategy, driver, iterations, seed);
+    }
+
+    public MonteCarloResult run(RaceData data, Strategy strategy, String driver,
+                                int iterations, long scenarioSeed, long noiseSeed) {
+        MonteCarloResult result = new MonteCarloResult();
+        Random scenarioRng = new Random(scenarioSeed);
+        Random noiseRng = new Random(noiseSeed);
+
+        for (int i = 0; i < iterations; i++) {
+            RaceScenario scenario = generateScenario(scenarioRng);
+            double raceTime = engine.simulateRace(data, strategy, driver, scenario, noiseRng);
             result.addRaceTime(raceTime);
         }
 

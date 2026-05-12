@@ -1,6 +1,7 @@
 from flask import Flask, jsonify, request
 import fastf1
 import pandas as pd
+import numpy as np
 
 app = Flask(__name__)
 
@@ -51,32 +52,99 @@ def compute_driver_pace_from_laps(laps):
 
 
 def compute_tire_degradation_from_laps(laps):
-    degradation = {}
+    linear = {"SOFT": 0.0, "MEDIUM": 0.0, "HARD": 0.0}
+    quadratic = {"SOFT": 0.0, "MEDIUM": 0.0, "HARD": 0.0}
+    clean = laps.dropna(subset=["LapTime", "Compound", "Stint", "Driver"]).copy()
+    # Remove in-laps and out-laps — they'd bias the curve shape
+    if "PitInTime" in clean.columns:
+        clean = clean[clean["PitInTime"].isna()]
+    if "PitOutTime" in clean.columns:
+        clean = clean[clean["PitOutTime"].isna()]
+    if clean.empty:
+        return linear, quadratic
+    clean["LapSeconds"] = clean["LapTime"].dt.total_seconds()
+    clean["StintStart"] = clean.groupby(["Driver", "Stint"])["LapNumber"].transform("min")
+    clean["LapInStint"] = clean["LapNumber"] - clean["StintStart"]
     for compound in ["SOFT", "MEDIUM", "HARD"]:
-        compound_laps = laps[
-            (laps["Compound"] == compound) &
-            (laps["LapTime"].notna())
-            ].copy()
-        if len(compound_laps) <= 10:
-            degradation[compound] = 0.0
+        compound_laps = clean[clean["Compound"] == compound]
+        if len(compound_laps) < 10:
             continue
-        compound_laps["LapSeconds"] = compound_laps["LapTime"].dt.total_seconds()
-        compound_laps["LapNumberDiff"] = compound_laps["LapNumber"].diff()
-        compound_laps["LapTimeDiff"] = compound_laps["LapSeconds"].diff()
-        valid_steps = compound_laps[
-            (compound_laps["LapNumberDiff"] == 1) &
-            (compound_laps["LapTimeDiff"].notna())
-            ]
-        if valid_steps.empty:
-            degradation[compound] = 0.0
+        ages = compound_laps["LapInStint"].values.astype(float)
+        times = compound_laps["LapSeconds"].values.astype(float)
+        # Fit t = c0 + a*age + b*age^2; polyfit returns [b, a, c0]
+        try:
+            coeffs = np.polyfit(ages, times, deg=2)
+        except Exception:
             continue
-        slope = valid_steps["LapTimeDiff"].mean()
-        if pd.isna(slope):
-            degradation[compound] = 0.0
-        else:
-            degradation[compound] = float(slope)
-    return degradation
+        b = float(coeffs[0])
+        a = float(coeffs[1])
+        if a < 0:
+            a = 0.0
+        if b < 0:
+            b = 0.0
+        linear[compound] = a
+        quadratic[compound] = b
+    return linear, quadratic
 
+def compute_compound_base_offsets_from_laps(laps):
+    clean = laps.dropna(subset=["LapTime", "Compound", "Stint", "Driver"]).copy()
+    # Drop in-laps and out-laps — they are unrepresentative of clean-air pace
+    if "PitInTime" in clean.columns:
+        clean = clean[clean["PitInTime"].isna()]
+    if "PitOutTime" in clean.columns:
+        clean = clean[clean["PitOutTime"].isna()]
+
+    if clean.empty:
+        return {"SOFT": 0.0, "MEDIUM": 0.0, "HARD": 0.0}
+
+    clean["LapSeconds"] = clean["LapTime"].dt.total_seconds()
+
+    # Lap-in-stint: 0 is the first lap of the stint (out-lap, usually filtered above)
+    clean["StintStart"] = clean.groupby(["Driver", "Stint"])["LapNumber"].transform("min")
+    clean["LapInStint"] = clean["LapNumber"] - clean["StintStart"]
+
+    # Early-stint laps: fresh tire, past the out-lap, not yet degraded
+    fresh = clean[(clean["LapInStint"] >= 1) & (clean["LapInStint"] <= 4)]
+
+    compound_medians = {}
+    for compound in ["SOFT", "MEDIUM", "HARD"]:
+        compound_laps = fresh[fresh["Compound"] == compound]
+        if len(compound_laps) < 5:
+            continue
+        compound_medians[compound] = float(compound_laps["LapSeconds"].median())
+
+    if not compound_medians:
+        return {"SOFT": 0.0, "MEDIUM": 0.0, "HARD": 0.0}
+
+    fastest = min(compound_medians.values())
+    result = {}
+    for compound in ["SOFT", "MEDIUM", "HARD"]:
+        if compound in compound_medians:
+            result[compound] = float(compound_medians[compound] - fastest)
+        else:
+            result[compound] = 0.0
+    return result
+
+
+def aggregate_compound_offsets_from_sessions(sessions):
+    if not sessions:
+        return {"SOFT": 0.0, "MEDIUM": 0.0, "HARD": 0.0}
+
+    compound_history = {"SOFT": [], "MEDIUM": [], "HARD": []}
+    total_sessions = len(sessions)
+    for index, session in enumerate(sessions):
+        laps = session.laps
+        session_offsets = compute_compound_base_offsets_from_laps(laps)
+        weight = total_sessions - index
+        for compound in ["SOFT", "MEDIUM", "HARD"]:
+            compound_history[compound].append((session_offsets.get(compound, 0.0), weight))
+
+    aggregated = {}
+    for compound, values in compound_history.items():
+        factors = [factor for factor, _ in values]
+        weights = [weight for _, weight in values]
+        aggregated[compound] = weighted_average(factors, weights)
+    return clean_numeric_dict(aggregated)
 
 def get_same_race_history_sessions(target_year, race, max_races=5):
     sessions = []
@@ -148,25 +216,29 @@ def aggregate_driver_performance_from_sessions(sessions):
 
 def aggregate_tire_degradation_from_sessions(sessions):
     if not sessions:
-        return {"SOFT": 0.0, "MEDIUM": 0.0, "HARD": 0.0}
-    compound_history = {
-        "SOFT": [],
-        "MEDIUM": [],
-        "HARD": []
-    }
+        zeros = {"SOFT": 0.0, "MEDIUM": 0.0, "HARD": 0.0}
+        return zeros, dict(zeros)
+    linear_history = {"SOFT": [], "MEDIUM": [], "HARD": []}
+    quadratic_history = {"SOFT": [], "MEDIUM": [], "HARD": []}
     total_sessions = len(sessions)
     for index, session in enumerate(sessions):
         laps = session.laps
-        session_deg = compute_tire_degradation_from_laps(laps)
+        session_linear, session_quadratic = compute_tire_degradation_from_laps(laps)
         weight = total_sessions - index
         for compound in ["SOFT", "MEDIUM", "HARD"]:
-            compound_history[compound].append((session_deg.get(compound, 0.0), weight))
-    aggregated = {}
-    for compound, values in compound_history.items():
-        factors = [factor for factor, _ in values]
-        weights = [weight for _, weight in values]
-        aggregated[compound] = weighted_average(factors, weights)
-    return clean_numeric_dict(aggregated)
+            linear_history[compound].append((session_linear.get(compound, 0.0), weight))
+            quadratic_history[compound].append((session_quadratic.get(compound, 0.0), weight))
+    aggregated_linear = {}
+    aggregated_quadratic = {}
+    for compound in ["SOFT", "MEDIUM", "HARD"]:
+        lin_factors = [f for f, _ in linear_history[compound]]
+        lin_weights = [w for _, w in linear_history[compound]]
+        aggregated_linear[compound] = weighted_average(lin_factors, lin_weights)
+
+        quad_factors = [f for f, _ in quadratic_history[compound]]
+        quad_weights = [w for _, w in quadratic_history[compound]]
+        aggregated_quadratic[compound] = weighted_average(quad_factors, quad_weights)
+    return clean_numeric_dict(aggregated_linear), clean_numeric_dict(aggregated_quadratic)
 
 
 def estimate_base_lap_time_from_sessions(sessions):
@@ -211,7 +283,7 @@ def race_data():
     race = request.args.get("race")
     same_track_sessions = get_same_race_history_sessions(year, race, max_races=5)
     recent_season_sessions = get_recent_season_sessions(year, race, max_races=5)
-    tire_deg = aggregate_tire_degradation_from_sessions(same_track_sessions)
+    tire_deg_linear, tire_deg_quadratic = aggregate_tire_degradation_from_sessions(same_track_sessions)
     track_driver_factors = aggregate_driver_performance_from_sessions(same_track_sessions)
     recent_driver_factors = aggregate_driver_performance_from_sessions(recent_season_sessions)
     performance = merge_driver_factors(
@@ -223,14 +295,19 @@ def race_data():
 
     base_lap = estimate_base_lap_time_from_sessions(same_track_sessions)
     track_temp, rain_prob = estimate_weather_from_sessions(same_track_sessions)
+    compound_offsets = aggregate_compound_offsets_from_sessions(same_track_sessions)
+
+    laps = same_track_sessions[0].laps if same_track_sessions else None
 
     return jsonify({
         "base_lap_time": float(base_lap),
         "performance_factor": clean_numeric_dict(performance),
-        "tire_degradation": clean_numeric_dict(tire_deg),
+        "tire_degradation": clean_numeric_dict(tire_deg_linear),
+        "tire_degradation_quadratic": clean_numeric_dict(tire_deg_quadratic),
+        "compound_offsets": clean_numeric_dict(compound_offsets),
         "track_temp": float(track_temp),
         "rain_probability": float(rain_prob),
-        "total_laps": int(laps["LapNumber"].max())
+        "total_laps": int(laps["LapNumber"].max()) if laps is not None else 0,
     })
 
 

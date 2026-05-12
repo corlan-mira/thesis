@@ -17,11 +17,17 @@ public class RaceData {
     @JsonProperty("tire_degradation")
     private Map<String, Double> tireDegradation;
 
+    @JsonProperty("tire_degradation_quadratic")
+    private Map<String, Double> tireDegradationQuadratic;
+
     @JsonProperty("track_temp")
     private double trackTemp;
 
     @JsonProperty("rain_probability")
     private double rainProbability;
+
+    @JsonProperty("compound_offsets")
+    private Map<String, Double> compoundOffsets;
 
     @JsonProperty("total_laps")
     private int totalLaps;
@@ -53,6 +59,14 @@ public class RaceData {
         this.tireDegradation = tireDegradation;
     }
 
+    public Map<String, Double> getTireDegradationQuadratic() {
+        return tireDegradationQuadratic;
+    }
+
+    public void setTireDegradationQuadratic(Map<String, Double> tireDegradationQuadratic) {
+        this.tireDegradationQuadratic = tireDegradationQuadratic;
+    }
+
     public double getTrackTemp() {
         return trackTemp;
     }
@@ -69,6 +83,14 @@ public class RaceData {
         this.rainProbability = rainProbability;
     }
 
+    public Map<String, Double> getCompoundOffsets() {
+        return compoundOffsets;
+    }
+
+    public void setCompoundOffsets(Map<String, Double> compoundOffsets) {
+        this.compoundOffsets = compoundOffsets;
+    }
+
     public int getTotalLaps() {return totalLaps;}
     public void setTotalLaps(int totalLaps) {this.totalLaps = totalLaps;}
 
@@ -78,6 +100,8 @@ public class RaceData {
                 "baseLapTime=" + baseLapTime +
                 ", performanceFactor=" + performanceFactor +
                 ", tireDegradation=" + tireDegradation +
+                ", tireDegradationQuadratic=" + tireDegradationQuadratic +
+                ", compoundOffsets=" + compoundOffsets +
                 ", trackTemp=" + trackTemp +
                 ", rainProbability=" + rainProbability +
                 ", totalLaps=" + totalLaps +

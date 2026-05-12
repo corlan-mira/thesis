@@ -44,4 +44,12 @@ public class Strategy {
         }
         return null;
     }
+
+  public void AddPitStop(PitStop pitStop) {
+        pitStops.add(pitStop);
+  }
+
+  public void CreatePitStop(int lap, String compound) {
+        pitStops.add(new PitStop(lap, compound));
+  }
 }
